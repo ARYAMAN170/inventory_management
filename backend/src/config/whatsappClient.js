@@ -1,27 +1,35 @@
 import pkg from 'whatsapp-web.js';
-const { Client, RemoteAuth } = pkg;
+const { Client, LocalAuth, RemoteAuth } = pkg;
 import { MongoStore } from 'wwebjs-mongo';
 import mongoose from 'mongoose';
 import qrcode from 'qrcode-terminal';
 import os from 'os';
 
-let waClient = null; // We store it here so other files can grab it later
+let waClient = null;
 
 export const startWhatsAppRobot = async () => {
     try {
-        console.log('⏳ Connecting to MongoDB for WhatsApp session...');
-        await mongoose.connect(process.env.MONGODB_URI);
-        console.log('📦 MongoDB Connected successfully!');
-
-        // Tell WhatsApp to use MongoDB as its hard drive
-        const store = new MongoStore({ mongoose: mongoose });
+        // Determine if we are on local Windows PC or Linux Cloud
         const isWindows = os.platform() === 'win32';
+        let selectedAuthStrategy;
+
+        if (isWindows) {
+            console.log('💻 Windows detected: Using Local Storage for WhatsApp session.');
+            selectedAuthStrategy = new LocalAuth();
+        } else {
+            console.log('⏳ Cloud detected: Connecting to MongoDB for WhatsApp session...');
+            await mongoose.connect(process.env.MONGODB_URI);
+            console.log('📦 MongoDB Connected successfully!');
+
+            const store = new MongoStore({ mongoose: mongoose });
+            selectedAuthStrategy = new RemoteAuth({
+                store: store,
+                backupSyncIntervalMs: 300000 // Backup every 5 mins
+            });
+        }
 
         waClient = new Client({
-            authStrategy: new RemoteAuth({
-                store: store,
-                backupSyncIntervalMs: 300000 // Automatically saves the session every 5 minutes
-            }),
+            authStrategy: selectedAuthStrategy,
             puppeteer: {
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-extensions'],
@@ -48,5 +56,4 @@ export const startWhatsAppRobot = async () => {
     }
 };
 
-// Export a function to get the client when sending messages
 export const getWaClient = () => waClient;
