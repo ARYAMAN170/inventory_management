@@ -64,7 +64,7 @@ const InventoryDashboard = () => {
   useEffect(() => {
     const fetchInventory = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/inventory');
+        const response = await fetch('https://inventory-management-452p.onrender.com/api/inventory');
         const result = await response.json();
         if (result.success) setInventory(result.data);
       } catch (error) {
