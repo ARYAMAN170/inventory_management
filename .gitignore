@@ -1,0 +1,24 @@
+# Node dependencies
+node_modules/
+*/node_modules/
+
+# Private Environment Variables
+.env
+*/.env
+
+# WhatsApp Session Cache (This caused your error!)
+.wwebjs_auth/
+*/.wwebjs_auth/
+
+# Generated Dispatch PDFs
+invoices/
+*/invoices/
+
+# Frontend Build Files
+dist/
+build/
+
+# IDE Configuration Files
+.idea/
+.vscode/
+.DS_Store
