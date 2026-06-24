@@ -47,8 +47,16 @@ export const startWhatsAppRobot = async () => {
         });
 
         waClient.on('qr', (qr) => {
-            console.log('📱 SCAN THIS QR CODE WITH THE FACTORY WHATSAPP ACCOUNT:');
-            qrcode.generate(qr, { small: true });
+            console.log('\n=========================================================');
+            console.log('📱 WHATSAPP QR CODE GENERATED!');
+            console.log('Render breaks terminal QR codes, so click the link below');
+            console.log('to view a clean QR code in a new web browser tab:');
+
+            // This converts the raw QR string into a safe web link
+            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}`;
+            console.log(`\n${qrImageUrl}\n`);
+
+            console.log('=========================================================\n');
         });
 
         waClient.on('remote_session_saved', () => {
