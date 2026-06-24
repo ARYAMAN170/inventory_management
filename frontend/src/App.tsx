@@ -3,27 +3,13 @@ import { useState, useMemo, useEffect } from 'react';
 // ==========================================
 // 1. SHARED TYPES & DATA
 // ==========================================
-interface CatalogItem {
-  id: string; process: string; brand: string; grade: string;
-}
+
 
 interface TransactionState {
   type: 'IN' | 'OUT' | null;
   process: string | null; brand: string | null; grade: string | null; quantity: string;
 }
 
-const mockCatalog: CatalogItem[] = [
-  { id: 'HM012T_MRPL', process: 'PP-MOULDING', brand: 'MRPL', grade: 'HM012T' },
-  { id: 'M12RR_HMEL', process: 'PP-MOULDING', brand: 'HMEL', grade: 'M12RR' },
-  { id: 'MH13_OPAL', process: 'PP-MOULDING', brand: 'OPAL', grade: 'MH-13' },
-  { id: 'F10SR_HMEL', process: 'PP-FILM', brand: 'HMEL', grade: 'F10SR' },
-  { id: 'V35GRI_HMEL', process: 'PP-RAFFIA', brand: 'HMEL', grade: 'V35GRI' },
-  { id: 'H050MN_RIL', process: 'PP-THERMOFOAMING', brand: 'RIL', grade: 'H050MN' },
-  { id: 'F18S010_GAIL', process: 'LLDPE-FILM', brand: 'GAIL', grade: 'F18S010' },
-  { id: 'B63003A_GAIL', process: 'HDPE-HDBLOW', brand: 'GAIL', grade: 'B63003A' },
-  { id: 'CALCIUM_PCC', process: 'PVC', brand: 'PCC', grade: 'CALCIUM' },
-  { id: 'MB_SOLTEX', process: 'MASTER BATCH', brand: 'SOLTEX', grade: 'MASTER BATCH' },
-];
 
 // ==========================================
 // 2. SHARED UI COMPONENTS
