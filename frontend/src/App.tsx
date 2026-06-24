@@ -120,7 +120,7 @@ const MaterialLogger = () => {
 
   // Fetch Live Inventory Data
   useEffect(() => {
-    fetch('http://localhost:5000/api/inventory')
+    fetch('https://inventory-management-452p.onrender.com/api/inventory')
       .then(res => res.json())
       .then(data => { if (data.success) setInventory(data.data); })
       .catch(err => console.error('Failed to load inventory for logger:', err));
@@ -145,7 +145,7 @@ const MaterialLogger = () => {
     if (isLoading) return; 
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/inventory', {
+      const response = await fetch('https://inventory-management-452p.onrender.com/api/inventory', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tx),
       });
       const data = await response.json();
@@ -203,7 +203,7 @@ const SalesGenerator = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/inventory')
+    fetch('https://inventory-management-452p.onrender.com/inventory')
       .then(res => res.json())
       .then(data => { if (data.success) setInventory(data.data); })
       .catch(err => console.error('Failed to load inventory for sales:', err));
@@ -235,7 +235,7 @@ const SalesGenerator = () => {
     if (!customerInfo.name || !customerInfo.phone || !items[0].grade) return alert("Fill customer details and complete at least 1 item.");
     setIsProcessing(true);
     try {
-      const response = await fetch('http://localhost:5000/api/create-order', {
+      const response = await fetch('https://inventory-management-452p.onrender.com/api/create-order', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: customerInfo.name, 
@@ -377,7 +377,7 @@ const OrderTracker = () => {
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/create-order/list');
+      const response = await fetch('https://inventory-management-452p.onrender.com/api/create-order/list');
       const result = await response.json();
       if (result.success) setOrders(result.data.reverse());
     } catch (error) {
@@ -395,7 +395,7 @@ const OrderTracker = () => {
     setOrders(orders.map(o => o.orderId === orderId ? { ...o, status: newStatus } : o));
 
     try {
-      const response = await fetch('http://localhost:5000/api/create-order/status', {
+      const response = await fetch('https://inventory-management-452p.onrender.com/api/create-order/status', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, status: newStatus })
