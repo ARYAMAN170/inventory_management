@@ -32,7 +32,16 @@ export const startWhatsAppRobot = async () => {
             authStrategy: selectedAuthStrategy,
             puppeteer: {
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-extensions'],
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage', // Prevents Docker container memory crashes
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process', // Forces Chrome to use less RAM
+                    '--disable-gpu'
+                ],
                 executablePath: isWindows ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined,
             }
         });
