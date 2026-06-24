@@ -203,7 +203,7 @@ const SalesGenerator = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    fetch('https://inventory-management-452p.onrender.com/inventory')
+    fetch('https://inventory-management-452p.onrender.com/api/inventory')
       .then(res => res.json())
       .then(data => { if (data.success) setInventory(data.data); })
       .catch(err => console.error('Failed to load inventory for sales:', err));
