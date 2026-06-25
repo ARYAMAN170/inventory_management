@@ -318,11 +318,20 @@ const InventoryDashboard = () => {
 // ==========================================
 // MODULE: MATERIAL LOGGER
 // ==========================================
+// ==========================================
+// MODULE: MATERIAL LOGGER (NESTED SELECTION)
+// ==========================================
 const MaterialLogger = () => {
   const [inventory, setInventory] = useState<any[]>([]);
-  const [step, setStep] = useState(1);
+  
+  // We condensed 5 steps down to 3: [1: Type] -> [2: Select Material] -> [3: Quantity]
+  const [step, setStep] = useState(1); 
   const [isLoading, setIsLoading] = useState(false);
   const [tx, setTx] = useState<TransactionState>({ type: null, process: null, brand: null, grade: null, quantity: '' });
+
+  // Accordion states for the selection step
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  const [expandedSubCats, setExpandedSubCats] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch(`${BASE_URL}/api/inventory`)
@@ -331,18 +340,28 @@ const MaterialLogger = () => {
       .catch(console.error);
   }, []);
 
-  const availableProcesses = useMemo(() => [...new Set(inventory.map(c => c.process).filter(Boolean))], [inventory]);
-  const availableBrands = useMemo(() => tx.process ? [...new Set(inventory.filter(c => c.process === tx.process).map(c => c.brand).filter(Boolean))] : [], [tx.process, inventory]);
-  const availableGrades = useMemo(() => tx.brand ? inventory.filter(c => c.process === tx.process && c.brand === tx.brand).map(c => c.grade).filter(Boolean) : [], [tx.process, tx.brand, inventory]);
+  // Group items by Main Category -> Sub Category (Process) exactly like the dashboard
+  const groupedInventory = useMemo(() => {
+    const groups: Record<string, Record<string, any[]>> = {};
+    inventory.forEach(item => {
+      const processName = (item.process || 'OTHER').trim().toUpperCase();
+      const mainCategory = processName.split('-')[0].trim();
+      const subCategory = processName;
 
-  const handleSelect = (key: keyof TransactionState, value: string) => {
-    setTx(prev => {
-      const next = { ...prev, [key]: value };
-      if (key === 'process') { next.brand = null; next.grade = null; }
-      if (key === 'brand') { next.grade = null; }
-      return next;
+      if (!groups[mainCategory]) groups[mainCategory] = {};
+      if (!groups[mainCategory][subCategory]) groups[mainCategory][subCategory] = [];
+
+      groups[mainCategory][subCategory].push(item);
     });
-    setStep(s => s + 1);
+    return groups;
+  }, [inventory]);
+
+  const toggleCategory = (cat: string) => setExpandedCats(p => ({ ...p, [cat]: !p[cat] }));
+  const toggleSubCategory = (sub: string) => setExpandedSubCats(p => ({ ...p, [sub]: !p[sub] }));
+
+  const handleSelectMaterial = (item: any) => {
+    setTx(prev => ({ ...prev, process: item.process, brand: item.brand, grade: item.grade }));
+    setStep(3); // Jump straight to quantity pad
   };
 
   const handleSubmit = async () => {
@@ -355,29 +374,21 @@ const MaterialLogger = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         alert(`✅ Logged ${tx.quantity} bags of ${tx.grade} (${tx.type})`);
+        // Reset completely
         setStep(1);
         setTx({ type: null, process: null, brand: null, grade: null, quantity: '' });
+        setExpandedCats({});
+        setExpandedSubCats({});
       } else alert(`❌ Failed: ${data.error}`);
     } catch { alert('❌ Network error.'); }
     finally { setIsLoading(false); }
   };
 
-  const stepLabels = ['Type', 'Process', 'Brand', 'Grade', 'Quantity'];
+  const stepLabels = ['Type', 'Select Material', 'Quantity'];
   const isIn = tx.type === 'IN';
 
-  const ButtonGrid = ({ items, stepKey }: any) => (
-    <div className="grid grid-cols-2 gap-3 mt-4">
-      {items.map((item: string) => (
-        <button key={item} onClick={() => handleSelect(stepKey, item)}
-          className="py-5 text-base font-bold bg-gray-900 text-white rounded-2xl active:bg-gray-700 transition-colors">
-          {item}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
-    <div className="max-w-lg mx-auto">
+    <div className="max-w-xl mx-auto">
       {/* Progress bar */}
       <div className="flex items-center gap-1.5 mb-6">
         {stepLabels.map((label, i) => (
@@ -388,54 +399,111 @@ const MaterialLogger = () => {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl ring-1 ring-gray-200 p-5">
+      <div className="bg-white rounded-2xl ring-1 ring-gray-200 p-4 sm:p-6 shadow-sm">
+        
+        {/* STEP 1: IN OR OUT */}
         {step === 1 && (
-          <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4 text-center">Select transaction type</p>
+          <div className="space-y-4 py-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-6 text-center">Select transaction type</p>
             <button onClick={() => { setTx({ ...tx, type: 'IN' }); setStep(2); }}
-              className="w-full py-8 text-2xl font-black bg-emerald-600 text-white rounded-2xl active:bg-emerald-800 shadow-sm">
+              className="w-full py-8 text-2xl font-black bg-emerald-600 text-white rounded-2xl active:bg-emerald-800 shadow-sm transition-transform active:scale-95">
               ↓ IN — Receive Material
             </button>
             <button onClick={() => { setTx({ ...tx, type: 'OUT' }); setStep(2); }}
-              className="w-full py-8 text-2xl font-black bg-indigo-600 text-white rounded-2xl active:bg-indigo-800 shadow-sm">
+              className="w-full py-8 text-2xl font-black bg-indigo-600 text-white rounded-2xl active:bg-indigo-800 shadow-sm transition-transform active:scale-95">
               ↑ OUT — Issue to Machine
             </button>
           </div>
         )}
 
+        {/* STEP 2: NESTED MATERIAL SELECTION */}
         {step === 2 && (
-          <>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center mb-1">Select process</p>
-            <ButtonGrid items={availableProcesses} stepKey="process" />
-          </>
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4 text-center">Select Material to Log</p>
+            
+            {Object.entries(groupedInventory).map(([mainCat, subCats]) => {
+              const isMainOpen = expandedCats[mainCat];
+              
+              return (
+                <div key={mainCat} className="bg-white rounded-xl ring-1 ring-gray-200 overflow-hidden shadow-sm">
+                  {/* Level 1: Main Category (e.g. PP) */}
+                  <button onClick={() => toggleCategory(mainCat)} className={`w-full flex items-center justify-between p-4 transition-colors ${isMainOpen ? 'bg-gray-50 border-b border-gray-200' : 'hover:bg-gray-50'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-white ${isIn ? 'bg-emerald-600' : 'bg-indigo-600'}`}>
+                        {mainCat.substring(0, 3)}
+                      </div>
+                      <h3 className="text-xl font-black text-gray-900">{mainCat}</h3>
+                    </div>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isMainOpen ? 'rotate-180 bg-gray-200' : 'bg-gray-100'}`}>
+                      <span className="text-gray-500 font-bold text-xs">▼</span>
+                    </div>
+                  </button>
+
+                  {/* Level 2: Sub-Category (e.g. PP-MOULDING) */}
+                  {isMainOpen && (
+                    <div className="bg-gray-50 p-2 space-y-2">
+                      {Object.entries(subCats).map(([subCat, items]) => {
+                        const isSubOpen = expandedSubCats[subCat];
+                        const displayName = subCat.startsWith(`${mainCat}-`) ? subCat.replace(`${mainCat}-`, '') : subCat;
+
+                        return (
+                          <div key={subCat} className="bg-white rounded-lg ring-1 ring-gray-200 overflow-hidden">
+                            <button onClick={() => toggleSubCategory(subCat)} className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                              <h4 className="text-base font-black text-gray-800">{displayName}</h4>
+                              <span className={`text-gray-400 font-bold text-xs transition-transform ${isSubOpen ? 'rotate-180' : ''}`}>▼</span>
+                            </button>
+
+                            {/* Level 3: Grade Selection Buttons */}
+                            {isSubOpen && (
+                              <div className="bg-gray-50/50 border-t border-gray-100 flex flex-col">
+                                {items.map((item, i) => (
+                                  <button 
+                                    key={i} 
+                                    onClick={() => handleSelectMaterial(item)}
+                                    className="w-full text-left p-3 hover:bg-indigo-50 active:bg-indigo-100 transition-colors flex justify-between items-center border-b border-gray-100 last:border-0 group"
+                                  >
+                                    <div>
+                                      <span className="font-black text-gray-900 group-hover:text-indigo-700 block sm:inline">{item.grade}</span>
+                                      <span className="text-xs text-gray-500 font-bold sm:ml-2">{item.brand}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="hidden sm:inline-block text-[10px] uppercase font-bold text-gray-400">Stock: {item.currentStock}</span>
+                                      <span className={`text-xs font-black text-white px-3 py-1.5 rounded-lg shadow-sm ${isIn ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
+                                        Select ➔
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
+
+        {/* STEP 3: QUANTITY PAD */}
         {step === 3 && (
-          <>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center mb-1">Select brand</p>
-            <ButtonGrid items={availableBrands} stepKey="brand" />
-          </>
-        )}
-        {step === 4 && (
-          <>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center mb-1">Select grade</p>
-            <ButtonGrid items={availableGrades} stepKey="grade" />
-          </>
-        )}
-        {step === 5 && (
           <FactoryQuantityPad
             transactionType={tx.type}
             selectedItem={`${tx.grade} (${tx.brand})`}
             quantity={tx.quantity}
             setQuantity={(val: any) => setTx({ ...tx, quantity: val })}
             onSubmit={handleSubmit}
-            onCancel={() => setStep(4)}
+            onCancel={() => setStep(2)} // Goes back to the accordion
             isLoading={isLoading}
           />
         )}
 
-        {step > 1 && step < 5 && (
-          <button onClick={() => setStep(s => s - 1)} className="mt-4 w-full py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors">
-            ← Back
+        {/* Global Back Button for Step 2 */}
+        {step === 2 && (
+          <button onClick={() => setStep(1)} className="mt-6 w-full py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors">
+            ← Back to Type Selection
           </button>
         )}
       </div>
