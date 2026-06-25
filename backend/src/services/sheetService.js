@@ -36,28 +36,29 @@ export const logMaterialTransaction = async (data) => {
     });
 };
 export const logSalesOrder = async (orderData, netTotal, invoiceNumber) => {
-    const { customerName, phone, date, items } = orderData;
+    const sheet = doc.sheetsByTitle['Transactions'];
+    if (!sheet) throw new Error("Transactions sheet not found!");
 
-    const sheet = doc.sheetsByTitle['Orders'];
-    if (!sheet) {
-        console.warn("⚠️ Orders tab not found in Google Sheets. Skipping DB log.");
-        return;
+    const now = new Date();
+
+    // Format exactly to match your Google Sheet columns
+    const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }); // HH:MM:SS AM/PM
+
+    // Append a row for every single item in the dispatch order
+    for (const item of orderData.items) {
+        await sheet.addRow({
+            'Date': dateStr,
+            'Time': timeStr,
+            'Type': 'OUT', // Since this is a dispatch/sales generator, type is always OUT
+            'Process': item.rawProcess.toUpperCase(),
+            'Brand': item.rawBrand.toUpperCase(),
+            'Grade': item.rawGrade.toUpperCase(),
+            'Quantity': Number(item.quantity) // Number of bags logged safely
+        });
     }
-
-    // Combine items into a readable string for the spreadsheet
-    const itemsSummary = items.map(i => `${i.quantity}x ${i.particular}`).join(', ');
-
-    await sheet.addRow({
-        'Order ID': invoiceNumber,
-        'Date': date,
-        'Customer Name': customerName,
-        'Phone': phone,
-        'Total Amount': netTotal,
-        'Status': 'Pending',
-        'Items Summary': itemsSummary
-    });
-};
-// Fetch all orders for the tracking dashboard
+    console.log(`📊 Successfully logged ${orderData.items.length} items to Transactions sheet!`);
+};// Fetch all orders for the tracking dashboard
 export const fetchAllOrders = async () => {
     const sheet = doc.sheetsByTitle['Orders'];
     if (!sheet) throw new Error('Orders tab not found');
