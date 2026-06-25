@@ -81,9 +81,16 @@ const FactoryQuantityPad = ({ transactionType, selectedItem, quantity, setQuanti
 // ==========================================
 // MODULE: INVENTORY DASHBOARD
 // ==========================================
+// ==========================================
+// MODULE: INVENTORY DASHBOARD (NESTED)
+// ==========================================
 const InventoryDashboard = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Track expanded state for both levels
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  const [expandedSubCats, setExpandedSubCats] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch(`${BASE_URL}/api/inventory`)
@@ -93,6 +100,34 @@ const InventoryDashboard = () => {
       .finally(() => setIsLoading(false));
   }, []);
 
+  // Group items by Main Category -> Sub Category (Process)
+  const groupedInventory = useMemo(() => {
+    const groups: Record<string, Record<string, any[]>> = {};
+    inventory.forEach(item => {
+      const processName = (item.process || 'OTHER').trim().toUpperCase();
+      // Extract main category (e.g., "PP" from "PP-MOULDING")
+      const mainCategory = processName.split('-')[0].trim();
+      const subCategory = processName; 
+
+      if (!groups[mainCategory]) groups[mainCategory] = {};
+      if (!groups[mainCategory][subCategory]) groups[mainCategory][subCategory] = [];
+
+      groups[mainCategory][subCategory].push(item);
+    });
+    return groups;
+  }, [inventory]);
+
+  const toggleCategory = (cat: string) => setExpandedCats(p => ({ ...p, [cat]: !p[cat] }));
+  const toggleSubCategory = (sub: string) => setExpandedSubCats(p => ({ ...p, [sub]: !p[sub] }));
+
+  // Helper to calculate totals for an array of items
+  const calcTotals = (items: any[]) => ({
+    opening: items.reduce((s, i) => s + Number(i.opening || 0), 0),
+    in: items.reduce((s, i) => s + Number(i.totalIn || 0), 0),
+    out: items.reduce((s, i) => s + Number(i.totalOut || 0), 0),
+    current: items.reduce((s, i) => s + Number(i.current || 0), 0),
+  });
+
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center py-20 text-gray-400">
       <div className="w-8 h-8 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin mb-3" />
@@ -101,75 +136,180 @@ const InventoryDashboard = () => {
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Summary pills */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {[
-          { label: 'Materials', val: inventory.length, color: 'bg-indigo-50 text-indigo-800' },
-           ].map(s => (
-          <div key={s.label} className={`${s.color} rounded-xl p-3 text-center`}>
-            <p className="text-xl font-black">{s.val}</p>
-            <p className="text-xs font-bold opacity-70 uppercase tracking-wide">{s.label}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-indigo-50 text-indigo-800 rounded-xl p-3 text-center ring-1 ring-indigo-100">
+          <p className="text-xl font-black">{inventory.length}</p>
+          <p className="text-xs font-bold opacity-70 uppercase tracking-wide">Total Grades</p>
+        </div>
       </div>
 
-      {/* Cards on mobile, table on md+ */}
-      <div className="hidden md:block bg-white rounded-2xl ring-1 ring-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100">
-            <tr>
-              {['Process', 'Brand', 'Grade', 'Opening', 'In', 'Out', 'Current'].map(h => (
-                <th key={h} className={`px-4 py-3 font-bold text-xs uppercase tracking-wider text-left ${h === 'Current' ? 'text-gray-900 bg-gray-100' : 'text-gray-500'}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {inventory.map((item, i) => (
-              <tr key={i} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-medium text-gray-700">{item.process}</td>
-                <td className="px-4 py-3 text-gray-600">{item.brand}</td>
-                <td className="px-4 py-3 font-bold text-gray-800">{item.grade}</td>
-                <td className="px-4 py-3 text-center text-gray-400">{item.opening}</td>
-                <td className="px-4 py-3 text-center font-bold text-emerald-600">{item.totalIn}</td>
-                <td className="px-4 py-3 text-center font-bold text-sky-600">{item.totalOut}</td>
-                <td className="px-4 py-3 text-center font-black text-gray-900 bg-gray-50">{item.current}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Level 1: Main Category Accordion */}
+      <div className="space-y-4">
+        {Object.entries(groupedInventory).map(([mainCat, subCats]) => {
+          const isMainOpen = expandedCats[mainCat];
+          
+          // Calculate Grand Totals for this Main Category (e.g., ALL PP)
+          const allItemsInMain = Object.values(subCats).flat();
+          const mainTotals = calcTotals(allItemsInMain);
+          const isMainOutOfStock = mainTotals.current <= 0;
 
-      {/* Mobile cards */}
-      <div className="md:hidden space-y-3">
-        {inventory.map((item, i) => (
-          <div key={i} className="bg-white rounded-2xl ring-1 ring-gray-200 p-4">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="font-black text-gray-900 text-base">{item.grade}</p>
-                <p className="text-sm text-gray-500">{item.brand} · {item.process}</p>
-              </div>
-              <div className="text-right bg-gray-100 rounded-xl px-3 py-1">
-                <p className="text-xl font-black text-gray-900">{item.current}</p>
-                <p className="text-xs text-gray-500 font-medium">bags</p>
-              </div>
+          return (
+            <div key={mainCat} className="bg-white rounded-2xl ring-1 ring-gray-200 overflow-hidden shadow-sm transition-all">
+              
+              {/* Main Category Header */}
+              <button onClick={() => toggleCategory(mainCat)} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors border-b border-transparent data-[open=true]:border-gray-200" data-open={isMainOpen}>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-lg shadow-sm">
+                    {mainCat.substring(0, 3)}
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-2xl font-black text-gray-900 leading-tight">{mainCat}</h3>
+                    <span className="text-gray-500 text-sm font-bold">
+                      {Object.keys(subCats).length} Processes
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-5">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Total {mainCat} Stock</p>
+                    <p className={`text-2xl font-black ${isMainOutOfStock ? 'text-red-600' : 'text-gray-900'}`}>
+                      {mainTotals.current} <span className="text-sm font-medium text-gray-500">bags</span>
+                    </p>
+                  </div>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isMainOpen ? 'rotate-180 bg-gray-200' : 'bg-gray-100'}`}>
+                    <span className="text-gray-500 font-bold text-xs">▼</span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Level 2: Sub-Category Accordion (Processes) */}
+              {isMainOpen && (
+                <div className="bg-gray-50/50 p-3 space-y-3">
+                  {Object.entries(subCats).map(([subCat, items]) => {
+                    const isSubOpen = expandedSubCats[subCat];
+                    const subTotals = calcTotals(items);
+                    const isSubOutOfStock = subTotals.current <= 0;
+                    
+                    // Cleanup subcategory name (remove prefix if it matches mainCat for cleaner UI, e.g., "PP-MOULDING" -> "MOULDING")
+                    const displayName = subCat.startsWith(`${mainCat}-`) ? subCat.replace(`${mainCat}-`, '') : subCat;
+
+                    return (
+                      <div key={subCat} className="bg-white rounded-xl ring-1 ring-gray-200 overflow-hidden shadow-sm">
+                        
+                        {/* Sub-Category Header */}
+                        <button onClick={() => toggleSubCategory(subCat)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-2 h-8 bg-indigo-500 rounded-full"></div>
+                            <div className="text-left">
+                              <h4 className="text-lg font-black text-gray-800">{displayName}</h4>
+                              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{items.length} variants</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className={`px-3 py-1 rounded-lg ${isSubOutOfStock ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-800'}`}>
+                              <span className="font-black">{subTotals.current}</span>
+                              <span className="text-[10px] font-bold ml-1 uppercase opacity-70">bags</span>
+                            </div>
+                            <span className={`text-gray-400 font-bold text-xs transition-transform ${isSubOpen ? 'rotate-180' : ''}`}>▼</span>
+                          </div>
+                        </button>
+
+                        {/* Level 3: The Data Table (Grades) */}
+                        {isSubOpen && (
+                          <div className="border-t border-gray-100">
+                            {/* Desktop Table */}
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-indigo-50/30 border-b border-gray-200">
+                                  <tr>
+                                    {['Brand', 'Grade', 'Opening', 'In', 'Out', 'Current'].map(h => (
+                                      <th key={h} className={`px-5 py-3 font-bold text-[11px] uppercase tracking-wider ${h === 'Brand' || h === 'Grade' ? 'text-left' : 'text-center'} ${h === 'Current' ? 'text-indigo-900 bg-indigo-50' : 'text-gray-500'}`}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {items.map((item, i) => {
+                                    const isOutOfStock = Number(item.current) <= 0;
+                                    return (
+                                      <tr key={i} className={`transition-colors ${isOutOfStock ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
+                                        <td className="px-5 py-3 text-gray-600 font-medium">{item.brand}</td>
+                                        <td className="px-5 py-3 font-black text-gray-800">{item.grade}</td>
+                                        <td className="px-5 py-3 text-center text-gray-400">{item.opening}</td>
+                                        <td className="px-5 py-3 text-center font-bold text-emerald-600">{item.totalIn}</td>
+                                        <td className="px-5 py-3 text-center font-bold text-sky-600">{item.totalOut}</td>
+                                        <td className={`px-5 py-3 text-center font-black ${isOutOfStock ? 'text-red-600 bg-red-50/50' : 'text-gray-900 bg-indigo-50/30'}`}>{item.current}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {/* EXACT PAPER STYLE TOTAL ROW */}
+                                  <tr className="bg-gray-100 border-t-2 border-gray-300">
+                                    <td colSpan={2} className="px-5 py-3.5 font-black text-gray-900 uppercase tracking-widest text-xs text-right">
+                                      {displayName} TOTAL :
+                                    </td>
+                                    <td className="px-5 py-3.5 text-center font-black text-gray-600">{subTotals.opening}</td>
+                                    <td className="px-5 py-3.5 text-center font-black text-emerald-700">+{subTotals.in}</td>
+                                    <td className="px-5 py-3.5 text-center font-black text-sky-700">-{subTotals.out}</td>
+                                    <td className="px-5 py-3.5 text-center font-black text-indigo-900 bg-indigo-100">{subTotals.current}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Mobile View */}
+                            <div className="md:hidden p-3 space-y-3 bg-gray-50/50">
+                              {items.map((item, i) => {
+                                const isOutOfStock = Number(item.currentStock) <= 0;
+                                return (
+                                  <div key={i} className={`bg-white rounded-xl ring-1 p-3 ${isOutOfStock ? 'ring-red-200 bg-red-50/30' : 'ring-gray-200'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                        <p className="font-black text-gray-900 text-sm">{item.grade}</p>
+                                        <p className="text-[10px] font-bold text-gray-400">{item.brand}</p>
+                                      </div>
+                                      <div className={`text-right rounded-lg px-2 py-1 ${isOutOfStock ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-900'}`}>
+                                        <span className="font-black">{item.currentStock}</span>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-1 text-center text-xs">
+                                      <div className="bg-gray-50 rounded py-1"><span className="text-gray-400 text-[10px] mr-1">OP</span><span className="font-bold text-gray-600">{item.opening}</span></div>
+                                      <div className="bg-emerald-50 rounded py-1"><span className="text-emerald-400 text-[10px] mr-1">IN</span><span className="font-bold text-emerald-700">+{item.totalIn}</span></div>
+                                      <div className="bg-sky-50 rounded py-1"><span className="text-sky-400 text-[10px] mr-1">OUT</span><span className="font-bold text-sky-700">-{item.totalOut}</span></div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {/* Mobile Sub-total Block */}
+                              <div className="bg-gray-800 text-white rounded-xl p-3 mt-2 flex justify-between items-center">
+                                <div>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{displayName} TOTAL</p>
+                                  <p className="text-lg font-black">{subTotals.current} bags</p>
+                                </div>
+                                <div className="text-right text-[10px] font-bold space-y-0.5">
+                                  <p className="text-emerald-400">IN: +{subTotals.in}</p>
+                                  <p className="text-sky-400">OUT: -{subTotals.out}</p>
+                                </div>
+                              </div>
+                            </div>
+
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="bg-gray-50 rounded-lg py-2">
-                <p className="font-bold text-gray-500">{item.opening}</p>
-                <p className="text-gray-400 font-medium">Opening</p>
-              </div>
-              <div className="bg-emerald-50 rounded-lg py-2">
-                <p className="font-bold text-emerald-700">+{item.totalIn}</p>
-                <p className="text-emerald-500 font-medium">In</p>
-              </div>
-              <div className="bg-sky-50 rounded-lg py-2">
-                <p className="font-bold text-sky-700">−{item.totalOut}</p>
-                <p className="text-sky-500 font-medium">Out</p>
-              </div>
-            </div>
+          );
+        })}
+
+        {Object.keys(groupedInventory).length === 0 && (
+          <div className="text-center py-12 text-gray-400 font-bold bg-white rounded-2xl ring-1 ring-gray-200">
+            No items in inventory
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -452,7 +592,15 @@ const SalesGenerator = () => {
                       : <select value={item.grade} onChange={e => handleItemChange(index, 'grade', e.target.value)} disabled={!item.brand}
                           className="w-full px-3 py-2.5 ring-1 ring-gray-200 rounded-lg text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-40">
                           <option value="">Select…</option>
-                          {availableG.map(g => <option key={g as string} value={g as string}>{g as string}</option>)}
+                          {availableG.map(g => {
+                            const invMatch = inventory.find(i => i.process === item.process && i.brand === item.brand && i.grade === g);
+                            const stockLeft = invMatch ? invMatch.currentStock : 0;
+                            return (
+                              <option key={g as string} value={g as string}>
+                                {g as string} ({stockLeft} Bags Left)
+                              </option>
+                            );
+                          })}
                         </select>
                     }
                   </div>
