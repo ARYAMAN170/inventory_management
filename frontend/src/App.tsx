@@ -882,7 +882,7 @@ export default function App() {
         </header>
 
         {/* ── Content ── */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto bg-gray-50 pb-24 p-4 md:p-6">
           <div className="max-w-4xl mx-auto">
             {activeModule === 'INVENTORY' && <InventoryDashboard />}
             {activeModule === 'LOG' && <MaterialLogger />}
@@ -893,10 +893,11 @@ export default function App() {
         </main>
 
         {/* ── Mobile Bottom Nav ── */}
-        <nav className="md:hidden bg-white border-t border-gray-200 flex flex-shrink-0 safe-bottom">
+        {/* ── Mobile Bottom Nav ── */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           {menuItems.map(item => (
             <button key={item.id} onClick={() => { setActiveModule(item.id as any); setMobileMenuOpen(false); }}
-              className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${activeModule === item.id ? 'text-indigo-600' : 'text-gray-400'}`}>
+              className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${activeModule === item.id ? 'text-indigo-600' : 'text-gray-400'}`}>
               <span className="text-xl">{item.icon}</span>
               <span className={`text-[10px] font-bold ${activeModule === item.id ? 'text-indigo-600' : 'text-gray-400'}`}>{item.label}</span>
             </button>
