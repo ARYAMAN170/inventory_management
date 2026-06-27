@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 // BACKEND CONFIGURATION — CHANGE THIS URL
 // ==========================================
 const BASE_URL = 'https://inventory-management-452p.onrender.com';
-
+//https://inventory-management-452p.onrender.com
 // ==========================================
 // SHARED TYPES
 // ==========================================
@@ -14,12 +14,13 @@ interface TransactionState {
   brand: string | null;
   grade: string | null;
   quantity: string;
+  partyName: string;
 }
 
 // ==========================================
 // SHARED UI: QUANTITY PAD
 // ==========================================
-const FactoryQuantityPad = ({ transactionType, selectedItem, quantity, setQuantity, onSubmit, onCancel, isLoading }: any) => {
+const FactoryQuantityPad = ({ transactionType, selectedItem, quantity, setQuantity, partyName, setPartyName, onSubmit, onCancel, isLoading }: any) => {
   const handlePadClick = (num: string) => {
     if (quantity === '' && num === '0') return;
     if (quantity.length >= 4) return;
@@ -29,13 +30,24 @@ const FactoryQuantityPad = ({ transactionType, selectedItem, quantity, setQuanti
 
   return (
     <div className="w-full">
-      <div className="text-center mb-5">
+      <div className="text-center mb-4">
         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
           {isReceiving ? 'Receiving Material' : 'Issuing Material'}
         </p>
         <div className={`text-xl font-black py-3 px-5 rounded-xl inline-block ${isReceiving ? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-200' : 'text-indigo-800 bg-indigo-50 ring-1 ring-indigo-200'}`}>
           {selectedItem}
         </div>
+      </div>
+
+      {/* DYNAMIC FIELD: Supplier vs Customer Input */}
+      <div className="mb-4">
+        <input 
+          type="text" 
+          placeholder={isReceiving ? "Enter Supplier Name..." : "Enter Customer/Party Name..."}
+          value={partyName}
+          onChange={(e) => setPartyName(e.target.value)}
+          className="w-full px-4 py-3 text-center font-bold text-gray-700 bg-gray-50 ring-1 ring-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 uppercase"
+        />
       </div>
 
       <div className="bg-gray-50 ring-1 ring-gray-200 rounded-xl h-20 mb-4 flex items-center justify-end px-5">
@@ -69,21 +81,18 @@ const FactoryQuantityPad = ({ transactionType, selectedItem, quantity, setQuanti
           className="py-4 text-base font-bold text-gray-600 bg-white ring-1 ring-gray-200 rounded-xl active:bg-gray-50">
           Back
         </button>
-        <button onClick={onSubmit} disabled={!quantity || isLoading}
-          className={`py-4 text-base font-bold text-white rounded-xl transition-colors ${isLoading || !quantity ? 'bg-gray-300 cursor-not-allowed' : isReceiving ? 'bg-emerald-600 active:bg-emerald-800' : 'bg-indigo-600 active:bg-indigo-800'}`}>
+        <button onClick={onSubmit} disabled={!quantity || isLoading || !partyName.trim()}
+          className={`py-4 text-base font-bold text-white rounded-xl transition-colors ${isLoading || !quantity || !partyName.trim() ? 'bg-gray-300 cursor-not-allowed' : isReceiving ? 'bg-emerald-600 active:bg-emerald-800' : 'bg-indigo-600 active:bg-indigo-800'}`}>
           {isLoading ? 'Saving…' : 'Confirm'}
         </button>
       </div>
     </div>
   );
 };
-
 // ==========================================
 // MODULE: INVENTORY DASHBOARD
 // ==========================================
-// ==========================================
-// MODULE: INVENTORY DASHBOARD (NESTED)
-// ==========================================
+
 const InventoryDashboard = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -318,29 +327,36 @@ const InventoryDashboard = () => {
 // ==========================================
 // MODULE: MATERIAL LOGGER
 // ==========================================
-// ==========================================
-// MODULE: MATERIAL LOGGER (NESTED SELECTION)
-// ==========================================
+
 const MaterialLogger = () => {
   const [inventory, setInventory] = useState<any[]>([]);
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
   
-  // We condensed 5 steps down to 3: [1: Type] -> [2: Select Material] -> [3: Quantity]
-  const [step, setStep] = useState(1); 
+  const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [tx, setTx] = useState<TransactionState>({ type: null, process: null, brand: null, grade: null, quantity: '' });
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  
+  const [tx, setTx] = useState<TransactionState>({ type: null, process: null, brand: null, grade: null, quantity: '', partyName: '' });
 
-  // Accordion states for the selection step
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [expandedSubCats, setExpandedSubCats] = useState<Record<string, boolean>>({});
+
+  const fetchRecentLogs = () => {
+    fetch(`${BASE_URL}/api/transactions`)
+      .then(r => r.json())
+      .then(data => { if (data.success) setRecentLogs(data.data); })
+      .catch(console.error);
+  };
 
   useEffect(() => {
     fetch(`${BASE_URL}/api/inventory`)
       .then(r => r.json())
       .then(data => { if (data.success) setInventory(data.data); })
       .catch(console.error);
+    
+    fetchRecentLogs();
   }, []);
 
-  // Group items by Main Category -> Sub Category (Process) exactly like the dashboard
   const groupedInventory = useMemo(() => {
     const groups: Record<string, Record<string, any[]>> = {};
     inventory.forEach(item => {
@@ -361,7 +377,7 @@ const MaterialLogger = () => {
 
   const handleSelectMaterial = (item: any) => {
     setTx(prev => ({ ...prev, process: item.process, brand: item.brand, grade: item.grade }));
-    setStep(3); // Jump straight to quantity pad
+    setStep(3);
   };
 
   const handleSubmit = async () => {
@@ -373,140 +389,198 @@ const MaterialLogger = () => {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`✅ Logged ${tx.quantity} bags of ${tx.grade} (${tx.type})`);
-        // Reset completely
         setStep(1);
-        setTx({ type: null, process: null, brand: null, grade: null, quantity: '' });
+        setTx({ type: null, process: null, brand: null, grade: null, quantity: '', partyName: '' });
         setExpandedCats({});
         setExpandedSubCats({});
+        fetchRecentLogs();
       } else alert(`❌ Failed: ${data.error}`);
     } catch { alert('❌ Network error.'); }
     finally { setIsLoading(false); }
+  };
+
+  const handleDeleteLog = async (rowNumber: number) => {
+    if (!window.confirm("Are you sure you want to delete this log? It will be removed from Google Sheets.")) return;
+    
+    setIsDeleting(rowNumber);
+    try {
+      const res = await fetch(`${BASE_URL}/api/transactions/${rowNumber}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchRecentLogs();
+      } else alert(`❌ Failed: ${data.error}`);
+    } catch { alert('❌ Network error.'); }
+    finally { setIsDeleting(null); }
   };
 
   const stepLabels = ['Type', 'Select Material', 'Quantity'];
   const isIn = tx.type === 'IN';
 
   return (
-    <div className="max-w-xl mx-auto">
-      {/* Progress bar */}
-      <div className="flex items-center gap-1.5 mb-6">
-        {stepLabels.map((label, i) => (
-          <div key={i} className="flex-1 text-center">
-            <div className={`h-1.5 rounded-full mb-1 transition-colors ${step > i ? (isIn ? 'bg-emerald-500' : 'bg-indigo-500') : 'bg-gray-200'}`} />
-            <p className={`text-xs font-bold hidden sm:block ${step > i ? 'text-gray-600' : 'text-gray-300'}`}>{label}</p>
-          </div>
-        ))}
+    <div className="max-w-xl mx-auto space-y-6">
+      
+      {/* ================================== */}
+      {/* 1. THE LOGGER COMPONENT            */}
+      {/* ================================== */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-6">
+          {stepLabels.map((label, i) => (
+            <div key={i} className="flex-1 text-center">
+              <div className={`h-1.5 rounded-full mb-1 transition-colors ${step > i ? (isIn ? 'bg-emerald-500' : 'bg-indigo-500') : 'bg-gray-200'}`} />
+              <p className={`text-xs font-bold hidden sm:block ${step > i ? 'text-gray-600' : 'text-gray-300'}`}>{label}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-2xl ring-1 ring-gray-200 p-4 sm:p-6 shadow-sm">
+          {step === 1 && (
+            <div className="space-y-4 py-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-6 text-center">Select transaction type</p>
+              <button onClick={() => { setTx({ ...tx, type: 'IN' }); setStep(2); }}
+                className="w-full py-8 text-2xl font-black bg-emerald-600 text-white rounded-2xl active:bg-emerald-800 shadow-sm transition-transform active:scale-95">
+                ↓ IN — Receive Material
+              </button>
+              <button onClick={() => { setTx({ ...tx, type: 'OUT' }); setStep(2); }}
+                className="w-full py-8 text-2xl font-black bg-indigo-600 text-white rounded-2xl active:bg-indigo-800 shadow-sm transition-transform active:scale-95">
+                ↑ OUT — Issue to Machine
+              </button>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4 text-center">Select Material to Log</p>
+              {Object.entries(groupedInventory).map(([mainCat, subCats]) => {
+                const isMainOpen = expandedCats[mainCat];
+                return (
+                  <div key={mainCat} className="bg-white rounded-xl ring-1 ring-gray-200 overflow-hidden shadow-sm">
+                    <button onClick={() => toggleCategory(mainCat)} className={`w-full flex items-center justify-between p-4 transition-colors ${isMainOpen ? 'bg-gray-50 border-b border-gray-200' : 'hover:bg-gray-50'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-white ${isIn ? 'bg-emerald-600' : 'bg-indigo-600'}`}>
+                          {mainCat.substring(0, 3)}
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900">{mainCat}</h3>
+                      </div>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isMainOpen ? 'rotate-180 bg-gray-200' : 'bg-gray-100'}`}>
+                        <span className="text-gray-500 font-bold text-xs">▼</span>
+                      </div>
+                    </button>
+
+                    {isMainOpen && (
+                      <div className="bg-gray-50 p-2 space-y-2">
+                        {Object.entries(subCats).map(([subCat, items]) => {
+                          const isSubOpen = expandedSubCats[subCat];
+                          const displayName = subCat.startsWith(`${mainCat}-`) ? subCat.replace(`${mainCat}-`, '') : subCat;
+                          return (
+                            <div key={subCat} className="bg-white rounded-lg ring-1 ring-gray-200 overflow-hidden">
+                              <button onClick={() => toggleSubCategory(subCat)} className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                                <h4 className="text-base font-black text-gray-800">{displayName}</h4>
+                                <span className={`text-gray-400 font-bold text-xs transition-transform ${isSubOpen ? 'rotate-180' : ''}`}>▼</span>
+                              </button>
+                              {isSubOpen && (
+                                <div className="bg-gray-50/50 border-t border-gray-100 flex flex-col">
+                                  {items.map((item, i) => (
+                                    <button key={i} onClick={() => handleSelectMaterial(item)} className="w-full text-left p-3 hover:bg-indigo-50 active:bg-indigo-100 transition-colors flex justify-between items-center border-b border-gray-100 last:border-0 group">
+                                      <div>
+                                        <span className="font-black text-gray-900 group-hover:text-indigo-700 block sm:inline">{item.grade}</span>
+                                        <span className="text-xs text-gray-500 font-bold sm:ml-2">{item.brand}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="hidden sm:inline-block text-[10px] uppercase font-bold text-gray-400">Stock: {item.currentStock}</span>
+                                        <span className={`text-xs font-black text-white px-3 py-1.5 rounded-lg shadow-sm ${isIn ? 'bg-emerald-500' : 'bg-indigo-500'}`}>Select ➔</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {step === 3 && (
+            <FactoryQuantityPad
+              transactionType={tx.type}
+              selectedItem={`${tx.grade} (${tx.brand})`}
+              quantity={tx.quantity}
+              setQuantity={(val: any) => setTx({ ...tx, quantity: val })}
+              partyName={tx.partyName}
+              setPartyName={(val: string) => setTx({ ...tx, partyName: val })}
+              onSubmit={handleSubmit}
+              onCancel={() => setStep(2)}
+              isLoading={isLoading}
+            />
+          )}
+
+          {step === 2 && (
+            <button onClick={() => setStep(1)} className="mt-6 w-full py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors">
+              ← Back to Type Selection
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl ring-1 ring-gray-200 p-4 sm:p-6 shadow-sm">
+      {/* ================================== */}
+      {/* 2. RECENT TRANSACTIONS VIEW        */}
+      {/* ================================== */}
+      <div className="pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-black text-gray-900 mb-4">Recent Activity</h3>
         
-        {/* STEP 1: IN OR OUT */}
-        {step === 1 && (
-          <div className="space-y-4 py-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-6 text-center">Select transaction type</p>
-            <button onClick={() => { setTx({ ...tx, type: 'IN' }); setStep(2); }}
-              className="w-full py-8 text-2xl font-black bg-emerald-600 text-white rounded-2xl active:bg-emerald-800 shadow-sm transition-transform active:scale-95">
-              ↓ IN — Receive Material
-            </button>
-            <button onClick={() => { setTx({ ...tx, type: 'OUT' }); setStep(2); }}
-              className="w-full py-8 text-2xl font-black bg-indigo-600 text-white rounded-2xl active:bg-indigo-800 shadow-sm transition-transform active:scale-95">
-              ↑ OUT — Issue to Machine
-            </button>
+        {recentLogs.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 font-bold bg-white rounded-xl ring-1 ring-gray-200 text-sm">
+            No recent transactions found.
           </div>
-        )}
-
-        {/* STEP 2: NESTED MATERIAL SELECTION */}
-        {step === 2 && (
+        ) : (
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4 text-center">Select Material to Log</p>
-            
-            {Object.entries(groupedInventory).map(([mainCat, subCats]) => {
-              const isMainOpen = expandedCats[mainCat];
+            {recentLogs.map((log) => {
+              const isLogReceiving = log.type === 'IN';
+              // Safely handle both "person" (old backend) and "party" (new backend) fields
+              const partyLabel = log.party || log.person || 'Unknown Party'; 
               
               return (
-                <div key={mainCat} className="bg-white rounded-xl ring-1 ring-gray-200 overflow-hidden shadow-sm">
-                  {/* Level 1: Main Category (e.g. PP) */}
-                  <button onClick={() => toggleCategory(mainCat)} className={`w-full flex items-center justify-between p-4 transition-colors ${isMainOpen ? 'bg-gray-50 border-b border-gray-200' : 'hover:bg-gray-50'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-white ${isIn ? 'bg-emerald-600' : 'bg-indigo-600'}`}>
-                        {mainCat.substring(0, 3)}
+                <div key={log.rowNumber} className="bg-white rounded-xl ring-1 ring-gray-200 p-3 sm:p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    {/* Icon */}
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black ${isLogReceiving ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                      {isLogReceiving ? '↓ IN' : '↑ OUT'}
+                    </div>
+                    {/* Details */}
+                    <div>
+                      <p className="font-black text-gray-900 text-sm sm:text-base">
+                        {log.quantity} bags <span className="text-gray-400 font-medium ml-1">of {log.grade}</span>
+                      </p>
+                      <div className="text-xs text-gray-500 font-bold flex flex-wrap gap-x-2 mt-0.5">
+                        <span>{log.process}</span>
+                        <span>•</span>
+                        <span className="text-gray-800 uppercase">{partyLabel}</span>
+                        <span>•</span>
+                        <span className="font-medium">{log.time}</span>
                       </div>
-                      <h3 className="text-xl font-black text-gray-900">{mainCat}</h3>
                     </div>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${isMainOpen ? 'rotate-180 bg-gray-200' : 'bg-gray-100'}`}>
-                      <span className="text-gray-500 font-bold text-xs">▼</span>
-                    </div>
+                  </div>
+                  
+                  {/* Delete Button */}
+                  <button 
+                    onClick={() => handleDeleteLog(log.rowNumber)}
+                    disabled={isDeleting === log.rowNumber}
+                    className="p-2 sm:p-3 text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex-shrink-0"
+                    title="Delete Entry"
+                  >
+                    {isDeleting === log.rowNumber ? '...' : '🗑️'}
                   </button>
-
-                  {/* Level 2: Sub-Category (e.g. PP-MOULDING) */}
-                  {isMainOpen && (
-                    <div className="bg-gray-50 p-2 space-y-2">
-                      {Object.entries(subCats).map(([subCat, items]) => {
-                        const isSubOpen = expandedSubCats[subCat];
-                        const displayName = subCat.startsWith(`${mainCat}-`) ? subCat.replace(`${mainCat}-`, '') : subCat;
-
-                        return (
-                          <div key={subCat} className="bg-white rounded-lg ring-1 ring-gray-200 overflow-hidden">
-                            <button onClick={() => toggleSubCategory(subCat)} className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
-                              <h4 className="text-base font-black text-gray-800">{displayName}</h4>
-                              <span className={`text-gray-400 font-bold text-xs transition-transform ${isSubOpen ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-
-                            {/* Level 3: Grade Selection Buttons */}
-                            {isSubOpen && (
-                              <div className="bg-gray-50/50 border-t border-gray-100 flex flex-col">
-                                {items.map((item, i) => (
-                                  <button 
-                                    key={i} 
-                                    onClick={() => handleSelectMaterial(item)}
-                                    className="w-full text-left p-3 hover:bg-indigo-50 active:bg-indigo-100 transition-colors flex justify-between items-center border-b border-gray-100 last:border-0 group"
-                                  >
-                                    <div>
-                                      <span className="font-black text-gray-900 group-hover:text-indigo-700 block sm:inline">{item.grade}</span>
-                                      <span className="text-xs text-gray-500 font-bold sm:ml-2">{item.brand}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <span className="hidden sm:inline-block text-[10px] uppercase font-bold text-gray-400">Stock: {item.currentStock}</span>
-                                      <span className={`text-xs font-black text-white px-3 py-1.5 rounded-lg shadow-sm ${isIn ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
-                                        Select ➔
-                                      </span>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               );
             })}
           </div>
         )}
-
-        {/* STEP 3: QUANTITY PAD */}
-        {step === 3 && (
-          <FactoryQuantityPad
-            transactionType={tx.type}
-            selectedItem={`${tx.grade} (${tx.brand})`}
-            quantity={tx.quantity}
-            setQuantity={(val: any) => setTx({ ...tx, quantity: val })}
-            onSubmit={handleSubmit}
-            onCancel={() => setStep(2)} // Goes back to the accordion
-            isLoading={isLoading}
-          />
-        )}
-
-        {/* Global Back Button for Step 2 */}
-        {step === 2 && (
-          <button onClick={() => setStep(1)} className="mt-6 w-full py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors">
-            ← Back to Type Selection
-          </button>
-        )}
       </div>
+
     </div>
   );
 };
