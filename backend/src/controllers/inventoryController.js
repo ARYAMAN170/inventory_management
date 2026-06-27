@@ -13,7 +13,7 @@ export const getLiveInventory = async (req, res) => {
             opening: Number(row.get('Opening')) || 0,
             totalIn: Number(row.get('Total IN')) || 0,
             totalOut: Number(row.get('Total OUT')) || 0,
-            currentStock: Number(row.get('Current Stock')) || 0 // This reads your formula output!
+            current: Number(row.get('Current Stock')) || 0 // This reads your formula output!
         })).filter(item => item.process); // Filter out empty lines
 
         res.status(200).json({ success: true, data: inventoryData });
