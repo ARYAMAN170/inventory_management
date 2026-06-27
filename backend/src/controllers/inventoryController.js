@@ -2,7 +2,7 @@ import {logMaterialTransaction } from '../services/sheetService.js';
 import { doc } from '../config/googleSheets.js';
 // Handle GET requests
 export const getLiveInventory = async (req, res) => {
-    try {
+    try {await doc.loadInfo();
         const sheet = doc.sheetsByTitle['Current_Inventory'];
         const rows = await sheet.getRows();
 

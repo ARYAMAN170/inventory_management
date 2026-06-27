@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 // ==========================================
 // BACKEND CONFIGURATION — CHANGE THIS URL
 // ==========================================
+//const BASE_URL = 'http://localhost:5000';
 const BASE_URL = 'https://inventory-management-452p.onrender.com';
 //https://inventory-management-452p.onrender.com
 // ==========================================
@@ -588,6 +589,9 @@ const MaterialLogger = () => {
 // ==========================================
 // MODULE: DISPATCH / SALES
 // ==========================================
+// ==========================================
+// MODULE: DISPATCH / SALES (DOWNLOAD MODE)
+// ==========================================
 const SalesGenerator = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '' });
@@ -617,14 +621,17 @@ const SalesGenerator = () => {
   };
 
   const handleGenerate = async () => {
-    if (!customerInfo.name || !customerInfo.phone || !items[0].grade) return alert("Fill customer details and at least 1 item.");
+    // Note: Phone number is now optional since we aren't using WhatsApp API
+    if (!customerInfo.name || !items[0].grade) return alert("Fill customer name and at least 1 item.");
+    
     setIsProcessing(true);
     try {
       const res = await fetch(`${BASE_URL}/api/create-order`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: customerInfo.name,
-          phone: customerInfo.phone,
+          phone: customerInfo.phone || 'N/A',
           date: new Date().toLocaleDateString('en-GB'),
           items: items.map(i => ({
             particular: `${i.process} - ${i.grade} (${i.brand})`,
@@ -637,13 +644,37 @@ const SalesGenerator = () => {
           packing: 0, freight: 0, advance: 0, previousBalance: 0
         })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert("✅ Dispatch summary generated & sent via WhatsApp!");
+
+      if (res.ok) {
+        // 1. Convert the response into a raw file (Blob)
+        const blob = await res.blob();
+        
+        // 2. Create a temporary invisible URL for the file
+        const downloadUrl = window.URL.createObjectURL(blob);
+        
+        // 3. Create a fake link, click it to trigger download, and remove it
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', `Challan_${customerInfo.name.replace(/\s+/g, '_')}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        alert("✅ Challan downloaded! You can now share it manually via WhatsApp.");
+        
+        // Reset the form
         setCustomerInfo({ name: '', phone: '' });
         setItems([{ process: '', brand: '', grade: '', quantity: 1, isCustom: false }]);
-      } else alert(`❌ Failed: ${data.error}`);
-    } catch { alert("Network error"); }
+      } else {
+        // If the backend threw an error, parse it as JSON to read the message
+        const errorData = await res.json();
+        alert(`❌ Failed: ${errorData.error}`);
+      }
+    } catch (err) { 
+      console.error(err);
+      alert("Network error. Could not download challan."); 
+    }
     finally { setIsProcessing(false); }
   };
 
@@ -657,13 +688,13 @@ const SalesGenerator = () => {
         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Customer Details</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1.5">Customer Name</label>
+            <label className="block text-xs font-bold text-gray-600 mb-1.5">Customer / Party Name</label>
             <input type="text" value={customerInfo.name} onChange={e => setCustomerInfo({ ...customerInfo, name: e.target.value })}
               className="w-full px-4 py-3 ring-1 ring-gray-200 rounded-xl text-sm font-bold uppercase bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
               placeholder="MANOHAR JI" />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1.5">WhatsApp Number</label>
+            <label className="block text-xs font-bold text-gray-600 mb-1.5">Phone (Optional)</label>
             <input type="tel" value={customerInfo.phone} onChange={e => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
               className="w-full px-4 py-3 ring-1 ring-gray-200 rounded-xl text-sm font-bold bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
               placeholder="9876543210" />
@@ -671,7 +702,7 @@ const SalesGenerator = () => {
         </div>
       </div>
 
-      {/* Items */}
+      {/* Items List */}
       <div className="bg-white rounded-2xl ring-1 ring-gray-200 p-5">
         <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Materials</p>
         <div className="space-y-4">
@@ -766,14 +797,14 @@ const SalesGenerator = () => {
       </div>
 
       {/* Summary */}
-      <div className="bg-gray-900 text-white rounded-2xl p-5 flex items-center justify-between">
+      <div className="bg-gray-900 text-white rounded-2xl p-5 flex items-center justify-between shadow-lg">
         <div>
           <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Total</p>
           <p className="text-2xl font-black">{totalBags} bags · {totalWeight} kg</p>
         </div>
         <button onClick={handleGenerate} disabled={isProcessing}
-          className={`px-6 py-4 rounded-xl font-black text-sm transition-colors ${isProcessing ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900 active:bg-gray-200'}`}>
-          {isProcessing ? 'Sending…' : 'Confirm & WhatsApp'}
+          className={`px-6 py-4 rounded-xl font-black text-sm transition-transform active:scale-95 ${isProcessing ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900 shadow-sm'}`}>
+          {isProcessing ? 'Generating PDF…' : '↓ Download Challan'}
         </button>
       </div>
     </div>
