@@ -3,8 +3,8 @@ import { useState, useMemo, useEffect } from 'react';
 // ==========================================
 // BACKEND CONFIGURATION — CHANGE THIS URL
 // ==========================================
-//const BASE_URL = 'http://localhost:5000';
-const BASE_URL = 'https://inventory-management-452p.onrender.com';
+const BASE_URL = 'http://localhost:5000';
+//const BASE_URL = 'https://inventory-management-452p.onrender.com';
 //https://inventory-management-452p.onrender.com
 // ==========================================
 // SHARED TYPES
@@ -589,14 +589,11 @@ const MaterialLogger = () => {
 // ==========================================
 // MODULE: DISPATCH / SALES
 // ==========================================
-// ==========================================
-// MODULE: DISPATCH / SALES (DOWNLOAD MODE)
-// ==========================================
 const SalesGenerator = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '' });
   const [items, setItems] = useState([{ process: '', brand: '', grade: '', quantity: 1, isCustom: false }]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<'log' | 'download' | null>(null);
 
   useEffect(() => {
     fetch(`${BASE_URL}/api/inventory`)
@@ -620,16 +617,16 @@ const SalesGenerator = () => {
     setItems(newItems);
   };
 
-  const handleGenerate = async () => {
-    // Note: Phone number is now optional since we aren't using WhatsApp API
+  const handleGenerate = async (action: 'log' | 'download') => {
     if (!customerInfo.name || !items[0].grade) return alert("Fill customer name and at least 1 item.");
     
-    setIsProcessing(true);
+    setIsProcessing(action);
     try {
       const res = await fetch(`${BASE_URL}/api/create-order`, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: action, // 👈 Tells backend what to do
           customerName: customerInfo.name,
           phone: customerInfo.phone || 'N/A',
           date: new Date().toLocaleDateString('en-GB'),
@@ -646,36 +643,38 @@ const SalesGenerator = () => {
       });
 
       if (res.ok) {
-        // 1. Convert the response into a raw file (Blob)
-        const blob = await res.blob();
+        // Check what kind of data the backend sent back
+        const contentType = res.headers.get('content-type');
         
-        // 2. Create a temporary invisible URL for the file
-        const downloadUrl = window.URL.createObjectURL(blob);
-        
-        // 3. Create a fake link, click it to trigger download, and remove it
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.setAttribute('download', `Challan_${customerInfo.name.replace(/\s+/g, '_')}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.parentNode?.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-
-        alert("✅ Challan downloaded! You can now share it manually via WhatsApp.");
+        if (contentType && contentType.includes('application/pdf')) {
+          // It's a PDF file!
+          const blob = await res.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.setAttribute('download', `Challan_${customerInfo.name.replace(/\s+/g, '_')}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode?.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+          alert("✅ Challan Downloaded & Logged!");
+        } else {
+          // It's just a JSON success message!
+          alert("✅ Dispatch Logged Successfully!");
+        }
         
         // Reset the form
         setCustomerInfo({ name: '', phone: '' });
         setItems([{ process: '', brand: '', grade: '', quantity: 1, isCustom: false }]);
       } else {
-        // If the backend threw an error, parse it as JSON to read the message
         const errorData = await res.json();
         alert(`❌ Failed: ${errorData.error}`);
       }
     } catch (err) { 
       console.error(err);
-      alert("Network error. Could not download challan."); 
+      alert("Network error."); 
     }
-    finally { setIsProcessing(false); }
+    finally { setIsProcessing(null); }
   };
 
   const totalBags = items.reduce((s, i) => s + Number(i.quantity), 0);
@@ -796,16 +795,29 @@ const SalesGenerator = () => {
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="bg-gray-900 text-white rounded-2xl p-5 flex items-center justify-between shadow-lg">
-        <div>
+      {/* Summary & Action Buttons */}
+      <div className="bg-gray-900 text-white rounded-2xl p-5 shadow-lg">
+        <div className="mb-4">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Total</p>
           <p className="text-2xl font-black">{totalBags} bags · {totalWeight} kg</p>
         </div>
-        <button onClick={handleGenerate} disabled={isProcessing}
-          className={`px-6 py-4 rounded-xl font-black text-sm transition-transform active:scale-95 ${isProcessing ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900 shadow-sm'}`}>
-          {isProcessing ? 'Generating PDF…' : '↓ Download Challan'}
-        </button>
+        
+        {/* TWO BUTTONS: LOG vs DOWNLOAD */}
+        <div className="grid grid-cols-2 gap-3">
+          <button 
+            onClick={() => handleGenerate('log')} 
+            disabled={isProcessing !== null}
+            className={`py-3.5 rounded-xl font-bold text-sm transition-transform active:scale-95 ${isProcessing === 'log' ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gray-700 text-white hover:bg-gray-600 ring-1 ring-gray-600'}`}>
+            {isProcessing === 'log' ? 'Logging…' : 'Log Only'}
+          </button>
+          
+          <button 
+            onClick={() => handleGenerate('download')} 
+            disabled={isProcessing !== null}
+            className={`py-3.5 rounded-xl font-black text-sm transition-transform active:scale-95 ${isProcessing === 'download' ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-900 shadow-sm'}`}>
+            {isProcessing === 'download' ? 'Generating…' : 'Log & Download'}
+          </button>
+        </div>
       </div>
     </div>
   );
