@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 // Import Configurations
 import { connectDatabase } from './src/config/googleSheets.js';
-import { startWhatsAppRobot } from './src/config/whatsappClient.js';
+// import { startWhatsAppRobot } from './src/config/whatsappClient.js';
 import transactionRoutes from './src/routes/transactionRoutes.js';
 // Import Routes
 import inventoryRoutes from './src/routes/inventoryRoutes.js';
@@ -28,6 +28,6 @@ app.listen(PORT, async () => {
     console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
 
     // Initialize External Services
-    await connectDatabase();
-    startWhatsAppRobot();
+    // await connectDatabase();
+    // startWhatsAppRobot();
 });

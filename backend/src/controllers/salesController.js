@@ -2,44 +2,28 @@ import { generateInvoicePDF } from '../services/pdfService.js';
 import { sendInvoiceWhatsApp } from '../services/whatsappService.js';
 import { logSalesOrder ,addInventoryItemIfMissing} from '../services/sheetService.js';
 
+// Inside your order controller (e.g., src/controllers/orderController.js)
+
 export const createOrder = async (req, res) => {
     try {
         const orderData = req.body;
 
-        // 1. Generate a unique invoice number
-        const invoiceNumber = `INV-${Date.now().toString().slice(-5)}`;
-        orderData.invoiceNumber = invoiceNumber;
+        // 1. Log the transaction to Google Sheets (Keep your existing sheetService logic)
+        // await logSalesOrder(orderData, netTotal, invoiceNumber);
 
-        // 2. Generate the PDF
-        const { filePath, netTotal } = await generateInvoicePDF(orderData);
+        // 2. Generate the PDF (Keep whatever PDF generator you are currently using)
+        // const pdfBuffer = await generateYourPDF(orderData);
 
-        // 3. Log the Order to Google Sheets FIRST
-        await logSalesOrder(orderData, netTotal, invoiceNumber);
+        // 3. SEND THE FILE DIRECTLY TO THE FRONTEND
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="Challan_${orderData.customerName}.pdf"`);
 
-        // 4. NEW FEATURE: Auto-add any custom materials to the Inventory Sheet
-        for (const item of orderData.items) {
-            if (item.isNew && item.rawProcess && item.rawBrand && item.rawGrade) {
-                await addInventoryItemIfMissing(item.rawProcess, item.rawBrand, item.rawGrade);
-            }
-        }
-
-        // 5. Try to send via WhatsApp
-        let whatsappStatus = "Sent";
-        try {
-            await sendInvoiceWhatsApp(orderData.phone, orderData.customerName, filePath, invoiceNumber);
-        } catch (waError) {
-            console.warn('⚠️ WhatsApp skipped:', waError.message);
-            whatsappStatus = "Not Sent (Robot offline)";
-        }
-
-        res.status(200).json({
-            success: true,
-            message: `Order logged! WhatsApp: ${whatsappStatus}`
-        });
+        // Send the raw PDF buffer back
+        res.status(200).send(pdfBuffer);
 
     } catch (error) {
-        console.error('Create Order Error:', error);
-        res.status(500).json({ success: false, error: error.message || 'Failed to process order' });
+        console.error('❌ Order Generation Error:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 import { fetchAllOrders, updateOrderStatusInSheet } from '../services/sheetService.js';
