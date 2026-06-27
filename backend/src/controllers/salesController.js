@@ -6,7 +6,7 @@ import { logSalesOrder ,addInventoryItemIfMissing} from '../services/sheetServic
 // Inside your order controller (e.g., src/controllers/orderController.js)
 
 export const createOrder = async (req, res) => {
-    await doc.loadInfo();
+    //await doc.loadInfo();
     try {
         const { action, ...orderData } = req.body;
 
