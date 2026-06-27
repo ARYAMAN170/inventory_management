@@ -30,19 +30,22 @@ export const startWhatsAppRobot = async () => {
 
         waClient = new Client({
             authStrategy: selectedAuthStrategy,
+            // 1. ADD THIS TO FIX CACHE CRASHES:
+            webVersionCache: {
+                type: 'none'
+            },
             puppeteer: {
-                headless: true,
+                headless: false, // Keep it false for one more test
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage', // Prevents Docker container memory crashes
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--single-process', // Forces Chrome to use less RAM
-                    '--disable-gpu'
+                    '--disable-extensions',
+                    // 2. ADD THIS TO STOP THE FRAME DETACHING:
+                    '--disable-features=IsolateOrigins,site-per-process'
                 ],
                 executablePath: isWindows ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined,
+                timeout: 0,
+                protocolTimeout: 0
             }
         });
 

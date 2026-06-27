@@ -20,7 +20,7 @@ export const fetchLiveInventory = async () => {
 
 export const logMaterialTransaction = async (data) => {
     // Remember to rename process to factoryProcess so we don't break Node's process object!
-    const { type, process: factoryProcess, brand, grade, quantity } = data;
+    const { type, process: factoryProcess, brand, grade, quantity ,partyName} = data;
 
     const sheet = doc.sheetsByTitle['Transactions'];
     if (!sheet) throw new Error('Transactions tab not found');
@@ -33,6 +33,7 @@ export const logMaterialTransaction = async (data) => {
         Brand: brand,
         Grade: grade,
         Quantity: Number(quantity),
+        Party: partyName,
     });
 };
 export const logSalesOrder = async (orderData, netTotal, invoiceNumber) => {
@@ -115,4 +116,39 @@ export const addInventoryItemIfMissing = async (process, brand, grade) => {
         });
         console.log(`✅ Auto-added new material to inventory: ${process} - ${brand} - ${grade}`);
     }
+};
+// src/services/sheetService.js
+
+// 1. Function to fetch recent logs
+export const getRecentTransactionsFromSheet = async () => {
+    const sheet = doc.sheetsByTitle['Transactions'];
+    if (!sheet) throw new Error("Transactions sheet not found!");
+
+    const rows = await sheet.getRows();
+    const recentRows = rows.slice(-5).reverse();
+
+    return recentRows.map(row => ({
+        rowNumber: row.rowNumber,
+        date: row.get('Date') || '',
+        time: row.get('Time') || '',
+        type: row.get('Type') || '',
+        process: row.get('Process') || '',
+        brand: row.get('Brand') || '',
+        grade: row.get('Grade') || '',
+        quantity: row.get('Quantity') || '',
+        party: row.get('Party') || 'Unknown'
+    }));
+};
+
+// 2. Function to delete a log
+export const deleteTransactionFromSheet = async (rowNumber) => {
+    const sheet = doc.sheetsByTitle['Transactions'];
+    if (!sheet) throw new Error("Transactions sheet not found!");
+
+    const rows = await sheet.getRows();
+    const rowToDelete = rows.find(r => r.rowNumber === rowNumber);
+
+    if (!rowToDelete) throw new Error("Row not found in sheet");
+
+    await rowToDelete.delete();
 };

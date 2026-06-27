@@ -1,11 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-
 // Import Configurations
 import { connectDatabase } from './src/config/googleSheets.js';
 import { startWhatsAppRobot } from './src/config/whatsappClient.js';
-
+import transactionRoutes from './src/routes/transactionRoutes.js';
 // Import Routes
 import inventoryRoutes from './src/routes/inventoryRoutes.js';
 import salesRoutes from './src/routes/salesRoutes.js'; // <-- MAKE SURE THIS IS UNCOMMENTED
@@ -21,7 +20,7 @@ app.use(express.json());
 // API Endpoints
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/create-order', salesRoutes); // <-- MAKE SURE THIS SAYS '/api/create-order'
-
+app.use('/api/transactions', transactionRoutes);
 // Boot Server
 const PORT = process.env.PORT || 5000;
 
