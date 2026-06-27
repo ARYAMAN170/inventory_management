@@ -1,25 +1,49 @@
 import { generateInvoicePDF } from '../services/pdfService.js';
+import fs from 'fs';
 import { sendInvoiceWhatsApp } from '../services/whatsappService.js';
 import { logSalesOrder ,addInventoryItemIfMissing} from '../services/sheetService.js';
 
 // Inside your order controller (e.g., src/controllers/orderController.js)
 
 export const createOrder = async (req, res) => {
+    await doc.loadInfo();
     try {
-        const orderData = req.body;
+        const { action, ...orderData } = req.body;
 
-        // 1. Log the transaction to Google Sheets (Keep your existing sheetService logic)
-        // await logSalesOrder(orderData, netTotal, invoiceNumber);
+        // 1. ALWAYS LOG TO GOOGLE SHEETS
+        // await logSalesOrder(orderData);
 
-        // 2. Generate the PDF (Keep whatever PDF generator you are currently using)
-        // const pdfBuffer = await generateYourPDF(orderData);
+        // 2. HANDLE 'LOG ONLY' ACTION
+        if (action === 'log') {
+            return res.status(200).json({ success: true, message: 'Logged successfully.' });
+        }
 
-        // 3. SEND THE FILE DIRECTLY TO THE FRONTEND
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="Challan_${orderData.customerName}.pdf"`);
+        // 3. HANDLE 'DOWNLOAD' ACTION
+        if (action === 'download') {
+            // Generate a random invoice number if the frontend didn't send one
+            if (!orderData.invoiceNumber) {
+                orderData.invoiceNumber = Date.now().toString().slice(-6);
+            }
 
-        // Send the raw PDF buffer back
-        res.status(200).send(pdfBuffer);
+            // A. Trigger your existing service (Wait for it to save to the './invoices' folder)
+            const { filePath } = await generateInvoicePDF(orderData);
+
+            // B. Read the newly created file from the server's hard drive
+            const pdfBuffer = fs.readFileSync(filePath);
+
+            // C. Send the file down to the user's browser
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="Challan_${orderData.customerName.replace(/\s+/g, '_')}.pdf"`);
+            res.status(200).send(pdfBuffer);
+
+            // D. Delete the physical file from the server so we don't waste storage space
+            fs.unlinkSync(filePath);
+
+            return; // End execution
+        }
+
+        // 4. FALLBACK
+        return res.status(400).json({ success: false, error: 'Invalid action requested.' });
 
     } catch (error) {
         console.error('❌ Order Generation Error:', error);
