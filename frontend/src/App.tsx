@@ -3,8 +3,8 @@ import { useState, useMemo, useEffect } from 'react';
 // ==========================================
 // BACKEND CONFIGURATION — CHANGE THIS URL
 // ==========================================
-const BASE_URL = 'http://localhost:5000';
-//const BASE_URL = 'https://inventory-management-452p.onrender.com';
+//const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'https://inventory-management-452p.onrender.com';
 //https://inventory-management-452p.onrender.com
 // ==========================================
 // SHARED TYPES
