@@ -3,8 +3,8 @@ import { useState, useMemo, useEffect } from 'react';
 // ==========================================
 // BACKEND CONFIGURATION — CHANGE THIS URL
 // ==========================================
-//const BASE_URL = 'http://localhost:5000';
-const BASE_URL = 'https://inventory-management-452p.onrender.com';
+const BASE_URL = 'http://localhost:5000';
+//const BASE_URL = 'https://inventory-management-452p.onrender.com';
 //https://inventory-management-452p.onrender.com
 // ==========================================
 // SHARED TYPES
@@ -97,18 +97,68 @@ const FactoryQuantityPad = ({ transactionType, selectedItem, quantity, setQuanti
 const InventoryDashboard = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Track expanded state for both levels
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [expandedSubCats, setExpandedSubCats] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
+  // 1. EXTRACTED FETCH FUNCTION (so we can call it after syncing)
+  const fetchInventory = () => {
     fetch(`${BASE_URL}/api/inventory`)
       .then(r => r.json())
       .then(result => { if (result.success) setInventory(result.data); })
       .catch(console.error)
       .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchInventory();
   }, []);
+
+  // ==========================================
+  // FEATURE: DOWNLOAD AS CSV
+  // ==========================================
+  const handleDownloadCSV = () => {
+    const headers = ['Process', 'Brand', 'Grade', 'Opening', 'Total IN', 'Total OUT', 'Current Stock'];
+    const csvRows = inventory.map(item => {
+      return `${item.process},${item.brand},${item.grade},${item.opening},${item.totalIn},${item.totalOut},${item.current}`;
+    });
+
+    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Factory_Inventory_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // ==========================================
+  // FEATURE: SYNC OPENING AMOUNT
+  // ==========================================
+  const handleSyncOpening = async () => {
+    const confirmMessage = "Are you sure? This will overwrite the 'Opening' column in Google Sheets with today's 'Current Stock' and archive today's transactions.";
+    if (!window.confirm(confirmMessage)) return;
+
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/inventory/sync-opening`, { method: 'POST' });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        alert("✅ Opening stock updated and transactions archived successfully!");
+        fetchInventory(); // Refresh the numbers on the screen
+      } else {
+        alert(`❌ Failed: ${data.error}`);
+      }
+    } catch (err) {
+      alert("Network error.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Group items by Main Category -> Sub Category (Process)
   const groupedInventory = useMemo(() => {
@@ -130,12 +180,12 @@ const InventoryDashboard = () => {
   const toggleCategory = (cat: string) => setExpandedCats(p => ({ ...p, [cat]: !p[cat] }));
   const toggleSubCategory = (sub: string) => setExpandedSubCats(p => ({ ...p, [sub]: !p[sub] }));
 
-  // Helper to calculate totals for an array of items
+  // Helper to calculate totals for an array of items (Fixed to check currentStock safely)
   const calcTotals = (items: any[]) => ({
     opening: items.reduce((s, i) => s + Number(i.opening || 0), 0),
     in: items.reduce((s, i) => s + Number(i.totalIn || 0), 0),
     out: items.reduce((s, i) => s + Number(i.totalOut || 0), 0),
-    current: items.reduce((s, i) => s + Number(i.current || 0), 0),
+    current: items.reduce((s, i) => s + Number(i.currentStock || i.current || 0), 0),
   });
 
   if (isLoading) return (
@@ -147,6 +197,31 @@ const InventoryDashboard = () => {
 
   return (
     <div className="space-y-4">
+      
+      {/* ========================================== */}
+      {/* NEW HEADER WITH ACTION BUTTONS             */}
+      {/* ========================================== */}
+      <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-5 rounded-2xl ring-1 ring-gray-200 shadow-sm gap-4 mb-2">
+        <h2 className="text-xl font-black text-gray-900">Live Inventory</h2>
+        
+        <div className="flex w-full sm:w-auto gap-3">
+          <button 
+            onClick={handleSyncOpening}
+            disabled={isSyncing}
+            className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-bold text-sm transition-transform active:scale-95 ${isSyncing ? 'bg-orange-200 text-orange-500 cursor-not-allowed' : 'bg-orange-100 text-orange-700 hover:bg-orange-200 ring-1 ring-orange-200'}`}
+          >
+            {isSyncing ? 'Syncing...' : '⟳ Set Opening'}
+          </button>
+          
+          <button 
+            onClick={handleDownloadCSV}
+            className="flex-1 sm:flex-none px-5 py-3 bg-gray-900 text-white hover:bg-gray-800 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-95"
+          >
+            ↓ Download CSV
+          </button>
+        </div>
+      </div>
+
       {/* Summary pills */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="bg-indigo-50 text-indigo-800 rounded-xl p-3 text-center ring-1 ring-indigo-100">
@@ -242,7 +317,7 @@ const InventoryDashboard = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                   {items.map((item, i) => {
-                                    const isOutOfStock = Number(item.current) <= 0;
+                                    const isOutOfStock = Number(item.currentStock) <= 0;
                                     return (
                                       <tr key={i} className={`transition-colors ${isOutOfStock ? 'bg-red-50/30' : 'hover:bg-gray-50'}`}>
                                         <td className="px-5 py-3 text-gray-600 font-medium">{item.brand}</td>
@@ -250,7 +325,7 @@ const InventoryDashboard = () => {
                                         <td className="px-5 py-3 text-center text-gray-400">{item.opening}</td>
                                         <td className="px-5 py-3 text-center font-bold text-emerald-600">{item.totalIn}</td>
                                         <td className="px-5 py-3 text-center font-bold text-sky-600">{item.totalOut}</td>
-                                        <td className={`px-5 py-3 text-center font-black ${isOutOfStock ? 'text-red-600 bg-red-50/50' : 'text-gray-900 bg-indigo-50/30'}`}>{item.current}</td>
+                                        <td className={`px-5 py-3 text-center font-black ${isOutOfStock ? 'text-red-600 bg-red-50/50' : 'text-gray-900 bg-indigo-50/30'}`}>{item.currentStock}</td>
                                       </tr>
                                     );
                                   })}

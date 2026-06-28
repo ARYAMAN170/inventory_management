@@ -34,6 +34,7 @@ export const logMaterialTransaction = async (data) => {
         Grade: grade,
         Quantity: Number(quantity),
         Party: partyName,
+        Status: 'Active'
     });
 };
 export const logSalesOrder = async (orderData, netTotal, invoiceNumber) => {
@@ -151,4 +152,92 @@ export const deleteTransactionFromSheet = async (rowNumber) => {
     if (!rowToDelete) throw new Error("Row not found in sheet");
 
     await rowToDelete.delete();
+};
+// ==========================================
+// SYNC CURRENT STOCK TO OPENING STOCK (BATCH UPDATE)
+// ==========================================
+// ==========================================
+// SYNC CURRENT STOCK TO OPENING STOCK (BATCH UPDATE)
+// ==========================================
+export const syncOpeningStock = async (req, res) => {
+    try {
+        // ---------------------------------------------------------
+        // PART 1: INVENTORY BATCH UPDATE (1 API CALL)
+        // ---------------------------------------------------------
+        const invSheet = doc.sheetsByTitle['Current_Inventory'];
+        if (!invSheet) throw new Error("Current_Inventory sheet not found!");
+
+        // Load all cells into memory at once
+        await invSheet.loadCells();
+
+        let processCol = -1, openingCol = -1, currentStockCol = -1;
+
+        // Find columns robustly (ignoring spaces and case)
+        for (let c = 0; c < invSheet.columnCount; c++) {
+            const cellValue = invSheet.getCell(0, c).value;
+            if (!cellValue) continue; // Skip empty cells
+
+            const headerVal = cellValue.toString().trim().toLowerCase();
+            if (headerVal === 'process') processCol = c;
+            if (headerVal === 'opening') openingCol = c;
+            if (headerVal === 'current stock') currentStockCol = c;
+        }
+
+        // Safety check to prevent the "-1" crash!
+        if (processCol === -1 || openingCol === -1 || currentStockCol === -1) {
+            throw new Error(`Missing columns in Current_Inventory sheet! Check your headers. Process found: ${processCol !== -1}, Opening found: ${openingCol !== -1}, Current Stock found: ${currentStockCol !== -1}`);
+        }
+
+        // Loop through the rows in memory and move the numbers
+        for (let r = 1; r < invSheet.rowCount; r++) {
+            const processCell = invSheet.getCell(r, processCol);
+
+            if (processCell.value) {
+                const currentStockCell = invSheet.getCell(r, currentStockCol);
+                const openingCell = invSheet.getCell(r, openingCol);
+
+                openingCell.value = Number(currentStockCell.value) || 0;
+            }
+        }
+
+        await invSheet.saveUpdatedCells();
+
+        // ---------------------------------------------------------
+        // PART 2: ARCHIVE TRANSACTIONS BATCH UPDATE (1 API CALL)
+        // ---------------------------------------------------------
+        const txSheet = doc.sheetsByTitle['Transactions'];
+        if (txSheet) {
+            await txSheet.loadCells();
+
+            let statusCol = -1;
+
+            for (let c = 0; c < txSheet.columnCount; c++) {
+                const cellValue = txSheet.getCell(0, c).value;
+                if (!cellValue) continue;
+
+                if (cellValue.toString().trim().toLowerCase() === 'status') {
+                    statusCol = c;
+                    break;
+                }
+            }
+
+            if (statusCol !== -1) {
+                for (let r = 1; r < txSheet.rowCount; r++) {
+                    const statusCell = txSheet.getCell(r, statusCol);
+                    // Standardize the check to ignore case and spaces
+                    if (statusCell.value && statusCell.value.toString().trim().toLowerCase() === 'active') {
+                        statusCell.value = 'Archived';
+                    }
+                }
+                await txSheet.saveUpdatedCells();
+            } else {
+                console.warn('⚠️ Status column not found in Transactions sheet. Skipping archive.');
+            }
+        }
+
+        res.status(200).json({ success: true, message: 'Stock synced and transactions archived successfully!' });
+    } catch (error) {
+        console.error('❌ Error syncing stock:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 };

@@ -28,6 +28,6 @@ app.listen(PORT, async () => {
     console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
 
     // Initialize External Services
-    // await connectDatabase();
+       await connectDatabase();
     // startWhatsAppRobot();
 });
